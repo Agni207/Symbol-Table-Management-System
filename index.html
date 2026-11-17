@@ -1,0 +1,2197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symbol Table Management System</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <style>
+        :root {
+            --sidebar-bg: #1a1a2e;
+            --sidebar-hover: #16213e;
+            --accent: #0f3460;
+            --primary: #0d6efd;
+        }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; }
+        
+        /* SIDEBAR */
+        #sidebar {
+            width: 260px; min-height: 100vh; background: var(--sidebar-bg);
+            position: fixed; top: 0; left: 0; z-index: 1000;
+            transition: all 0.3s; display: flex; flex-direction: column;
+        }
+        #sidebar .brand {
+            padding: 20px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        #sidebar .brand h5 { margin: 0; font-size: 14px; color: #aaa; }
+        #sidebar .brand h4 { margin: 0; font-size: 16px; color: #fff; font-weight: 700; }
+        #sidebar .brand i { font-size: 28px; color: #0d6efd; }
+        #sidebar nav a {
+            display: flex; align-items: center; gap: 12px;
+            padding: 13px 20px; color: #ccc; text-decoration: none;
+            transition: all 0.2s; font-size: 14px; border-left: 3px solid transparent;
+        }
+        #sidebar nav a:hover, #sidebar nav a.active {
+            background: var(--sidebar-hover); color: #fff;
+            border-left-color: #0d6efd;
+        }
+        #sidebar nav a i { font-size: 18px; width: 22px; }
+        #sidebar .sidebar-footer {
+            margin-top: auto; padding: 15px 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: #666; font-size: 12px;
+        }
+        
+        /* MAIN */
+        #main { margin-left: 260px; min-height: 100vh; }
+        .topbar {
+            background: #fff; padding: 15px 25px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .topbar h3 { margin: 0; font-size: 20px; font-weight: 700; color: #1a1a2e; }
+        .content-area { padding: 25px; }
+        
+        /* CARDS */
+        .stat-card {
+            background: #fff; border-radius: 12px; padding: 22px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); position: relative;
+            overflow: hidden; border: none;
+        }
+        .stat-card .icon-bg {
+            width: 56px; height: 56px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; margin-bottom: 15px;
+        }
+        .stat-card h2 { font-size: 32px; font-weight: 800; margin: 0; }
+        .stat-card p { margin: 0; color: #888; font-size: 13px; }
+        .card { border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-radius: 12px; }
+        .card-header { background: #fff; border-bottom: 1px solid #eee; border-radius: 12px 12px 0 0 !important; }
+        
+        /* TABLE */
+        .table { font-size: 13px; }
+        .table thead th { background: #f8f9fa; font-weight: 600; border: none; padding: 12px 15px; }
+        .table td { padding: 11px 15px; vertical-align: middle; border-color: #f0f0f0; }
+        
+        /* BADGES */
+        .type-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
+        
+        /* SECTION */
+        .section { display: none; }
+        .section.active { display: block; }
+        
+        /* SEARCH */
+        .search-box { position: relative; }
+        .search-box input { padding-left: 36px; border-radius: 25px; }
+        .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #aaa; }
+        
+        /* CODE EDITOR */
+        .CodeMirror { height: 350px; border-radius: 8px; font-size: 13px; }
+        
+        /* LOADER */
+        .loader { display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* SYMBOL TYPE COLORS */
+        .type-variable { background: #dbeafe; color: #1d4ed8; }
+        .type-function { background: #dcfce7; color: #15803d; }
+        .type-constant { background: #fef3c7; color: #d97706; }
+        .type-parameter { background: #fce7f3; color: #be185d; }
+        .type-array { background: #ede9fe; color: #7c3aed; }
+        .type-pointer { background: #fee2e2; color: #dc2626; }
+        .type-class { background: #ccfbf1; color: #0f766e; }
+        .type-struct { background: #ffedd5; color: #c2410c; }
+        .type-enum { background: #e0f2fe; color: #0369a1; }
+        .type-typedef { background: #f1f5f9; color: #475569; }
+        
+        /* SCOPE TREE */
+        .scope-tree { list-style: none; padding: 0; }
+        .scope-tree li { padding: 8px 10px; border-left: 2px solid #0d6efd; margin-bottom: 5px; border-radius: 0 6px 6px 0; background: #f8f9fa; }
+        
+        /* ALERT TOAST */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+        
+        /* MODAL */
+        .modal-header { background: linear-gradient(135deg, #1a1a2e, #0f3460); color: #fff; border-radius: 12px 12px 0 0; }
+        .modal-header .btn-close { filter: invert(1); }
+        
+        /* CHART */
+        .chart-container { position: relative; height: 280px; }
+        
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            #sidebar { width: 60px; }
+            #sidebar .brand h4, #sidebar .brand h5, #sidebar nav a span { display: none; }
+            #main { margin-left: 60px; }
+        }
+        
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        
+        /* SHIMMER LOADING */
+        .shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px; height: 20px; margin-bottom: 8px;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        
+        .source-preview {
+            font-family: monospace; font-size: 12px; background: #1a1a2e;
+            color: #a8ff78; padding: 15px; border-radius: 8px; max-height: 180px;
+            overflow-y: auto; white-space: pre-wrap;
+        }
+        
+        .breadcrumb { background: transparent; padding: 0; }
+        .breadcrumb-item a { color: #0d6efd; text-decoration: none; }
+        
+        .error-unresolved { border-left: 4px solid #dc3545; }
+        .error-resolved { border-left: 4px solid #198754; opacity: 0.7; }
+        
+        #scopeFilter, #programFilter { min-width: 160px; }
+        
+        .symbol-row:hover { background: #f0f7ff !important; cursor: pointer; }
+        
+        .info-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 20px;
+            padding: 4px 12px; font-size: 12px; color: #1d4ed8;
+        }
+        
+        .hero-banner {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 50%, #533483 100%);
+            border-radius: 16px; padding: 30px; color: #fff; margin-bottom: 25px;
+        }
+
+        /* AUTH */
+        #authScreen {
+            position: fixed; inset: 0; z-index: 5000;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at top left, #274690, #1a1a2e 45%, #0b132b);
+            padding: 20px;
+        }
+        #authScreen.hidden { display: none; }
+        .auth-shell {
+            width: min(960px, 100%);
+            display: grid; grid-template-columns: 1.05fr 0.95fr;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 22px; overflow: hidden; backdrop-filter: blur(10px);
+            box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+        }
+        .auth-hero {
+            padding: 42px 36px; color: #fff;
+            background: linear-gradient(160deg, rgba(13,110,253,0.35), rgba(83,52,131,0.25));
+        }
+        .auth-hero h1 { font-size: 28px; font-weight: 800; margin-bottom: 10px; }
+        .auth-hero p { opacity: 0.85; margin-bottom: 22px; }
+        .auth-feature {
+            display: flex; gap: 10px; align-items: flex-start;
+            margin-bottom: 12px; font-size: 14px; opacity: 0.92;
+        }
+        .auth-panel { background: #fff; padding: 34px 28px; }
+        .auth-panel h3 { font-weight: 800; color: #1a1a2e; }
+        .auth-tabs { display: flex; gap: 8px; margin: 18px 0 20px; }
+        .auth-tabs button {
+            flex: 1; border: 1px solid #e5e7eb; background: #f8fafc; color: #64748b;
+            border-radius: 10px; padding: 10px; font-weight: 600;
+        }
+        .auth-tabs button.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+        .auth-form { display: none; }
+        .auth-form.active { display: block; }
+        .auth-form .form-control { border-radius: 10px; padding: 11px 14px; }
+        .otp-boxes { display: flex; gap: 8px; justify-content: space-between; }
+        .otp-boxes input {
+            width: 100%; text-align: center; font-size: 22px; font-weight: 700;
+            border-radius: 10px; letter-spacing: 2px;
+        }
+        .auth-link { color: #0d6efd; cursor: pointer; text-decoration: none; font-size: 13px; }
+        .auth-link:hover { text-decoration: underline; }
+        .inbox-box {
+            margin-top: 12px; background: #f8fafc; border: 1px dashed #cbd5e1;
+            border-radius: 10px; padding: 12px; font-size: 12px; color: #475569;
+        }
+        .user-chip {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #f1f5f9; border-radius: 999px; padding: 6px 12px 6px 6px;
+        }
+        .user-avatar {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: linear-gradient(135deg,#0d6efd,#533483); color: #fff;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700;
+        }
+        .stat-card, .card { transition: transform .2s ease, box-shadow .2s ease; }
+        .stat-card:hover, .card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.1); }
+        body.dark-mode { background: #0f172a; color: #e2e8f0; }
+        body.dark-mode #main .topbar,
+        body.dark-mode .card,
+        body.dark-mode .stat-card,
+        body.dark-mode .card-header,
+        body.dark-mode .table thead th { background: #1e293b; color: #e2e8f0; }
+        body.dark-mode .table { color: #e2e8f0; }
+        body.dark-mode .form-control, body.dark-mode .form-select {
+            background: #0f172a; color: #e2e8f0; border-color: #334155;
+        }
+        body.dark-mode .topbar h3 { color: #f8fafc; }
+        body.dark-mode .text-muted { color: #94a3b8 !important; }
+        .quick-actions .btn { border-radius: 10px; }
+        #quickSearchModal .modal-content { border-radius: 16px; }
+        @media (max-width: 900px) {
+            .auth-shell { grid-template-columns: 1fr; }
+            .auth-hero { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===================== AUTH SCREEN ===================== -->
+<div id="authScreen">
+    <div class="auth-shell">
+        <div class="auth-hero">
+            <div class="d-flex align-items-center gap-2 mb-4">
+                <i class="bi bi-table" style="font-size:28px"></i>
+                <strong>Symbol Table MS</strong>
+            </div>
+            <h1>Manage compiler symbols with clarity</h1>
+            <p>Secure access to programs, scopes, symbols, analyzer, and reports — built for your Compiler Design PBL.</p>
+            <div class="auth-feature"><i class="bi bi-shield-lock-fill"></i><span>Login & registration with secure password hashing</span></div>
+            <div class="auth-feature"><i class="bi bi-envelope-check-fill"></i><span>Forgot password with email OTP verification</span></div>
+            <div class="auth-feature"><i class="bi bi-speedometer2"></i><span>Friendly dashboard, search, export & dark mode</span></div>
+        </div>
+        <div class="auth-panel">
+            <h3 id="authTitle">Welcome back</h3>
+            <p class="text-muted mb-0" id="authSubtitle" style="font-size:13px">Sign in to continue to your workspace</p>
+
+            <div class="auth-tabs" id="authTabs">
+                <button type="button" class="active" onclick="switchAuthTab('login')">Login</button>
+                <button type="button" onclick="switchAuthTab('register')">Register</button>
+            </div>
+
+            <!-- LOGIN -->
+            <form class="auth-form active" id="formLogin" onsubmit="return submitLogin(event)">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" class="form-control" id="loginEmail" required placeholder="you@example.com">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Password</label>
+                    <div class="input-group">
+                        <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
+                        <button class="btn btn-outline-secondary" type="button" onclick="togglePass('loginPassword', this)"><i class="bi bi-eye"></i></button>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="auth-link" onclick="switchAuthTab('forgot')">Forgot password?</span>
+                    <small class="text-muted">Demo: admin@symboltable.local</small>
+                </div>
+                <button class="btn btn-primary w-100 py-2 fw-semibold" id="loginBtn" type="submit">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Login
+                </button>
+            </form>
+
+            <!-- REGISTER -->
+            <form class="auth-form" id="formRegister" onsubmit="return submitRegister(event)">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Full Name</label>
+                    <input type="text" class="form-control" id="regName" required placeholder="Your name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" class="form-control" id="regEmail" required placeholder="you@example.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Password</label>
+                    <input type="password" class="form-control" id="regPassword" required minlength="6" placeholder="Min 6 characters">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Confirm Password</label>
+                    <input type="password" class="form-control" id="regConfirm" required minlength="6">
+                </div>
+                <button class="btn btn-primary w-100 py-2 fw-semibold" type="submit">
+                    <i class="bi bi-person-plus-fill me-1"></i> Create Account
+                </button>
+            </form>
+
+            <!-- FORGOT -->
+            <form class="auth-form" id="formForgot" onsubmit="return submitForgot(event)">
+                <p class="text-muted" style="font-size:13px">Enter your registered email. We’ll send a 6-digit OTP.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" class="form-control" id="forgotEmail" required>
+                </div>
+                <button class="btn btn-primary w-100 py-2 fw-semibold mb-2" type="submit">
+                    <i class="bi bi-send-fill me-1"></i> Send OTP
+                </button>
+                <div class="text-center"><span class="auth-link" onclick="switchAuthTab('login')">Back to Login</span></div>
+                <div class="inbox-box" id="otpInboxBox" style="display:none"></div>
+            </form>
+
+            <!-- VERIFY OTP -->
+            <form class="auth-form" id="formOtp" onsubmit="return submitVerifyOtp(event)">
+                <p class="text-muted" style="font-size:13px">Enter the OTP sent to <strong id="otpEmailLabel"></strong></p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">6-digit OTP</label>
+                    <input type="text" class="form-control text-center fw-bold" id="otpCode" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" style="letter-spacing:6px;font-size:22px">
+                </div>
+                <button class="btn btn-primary w-100 py-2 fw-semibold mb-2" type="submit">
+                    <i class="bi bi-shield-check me-1"></i> Verify OTP
+                </button>
+                <div class="d-flex justify-content-between">
+                    <span class="auth-link" onclick="switchAuthTab('forgot')">Resend OTP</span>
+                    <span class="auth-link" onclick="loadOtpInbox()">Open OTP Inbox</span>
+                </div>
+                <div class="inbox-box" id="otpInboxBox2" style="display:none"></div>
+            </form>
+
+            <!-- RESET PASSWORD -->
+            <form class="auth-form" id="formReset" onsubmit="return submitReset(event)">
+                <p class="text-muted" style="font-size:13px">OTP confirmed. Set your new password.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">New Password</label>
+                    <input type="password" class="form-control" id="resetPassword" required minlength="6">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Confirm New Password</label>
+                    <input type="password" class="form-control" id="resetConfirm" required minlength="6">
+                </div>
+                <button class="btn btn-success w-100 py-2 fw-semibold" type="submit">
+                    <i class="bi bi-key-fill me-1"></i> Update Password
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+    <div class="brand d-flex align-items-center gap-3">
+        <i class="bi bi-table"></i>
+        <div>
+            <h5>PBL Project</h5>
+            <h4>Symbol Table MS</h4>
+        </div>
+    </div>
+    <nav class="mt-2">
+        <a href="#" class="active" onclick="showSection('dashboard',this)">
+            <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
+        </a>
+        <a href="#" onclick="showSection('programs',this)">
+            <i class="bi bi-file-earmark-code-fill"></i><span>Programs</span>
+        </a>
+        <a href="#" onclick="showSection('scopes',this)">
+            <i class="bi bi-diagram-3-fill"></i><span>Scopes / Tables</span>
+        </a>
+        <a href="#" onclick="showSection('symbols',this)">
+            <i class="bi bi-braces"></i><span>Symbols</span>
+        </a>
+        <a href="#" onclick="showSection('errors',this)">
+            <i class="bi bi-bug-fill"></i><span>Error Log</span>
+        </a>
+        <a href="#" onclick="showSection('analyzer',this)">
+            <i class="bi bi-cpu-fill"></i><span>Code Analyzer</span>
+        </a>
+        <a href="#" onclick="showSection('reports',this)">
+            <i class="bi bi-bar-chart-fill"></i><span>Reports</span>
+        </a>
+        <a href="#" onclick="showSection('profile',this)">
+            <i class="bi bi-person-badge-fill"></i><span>My Profile</span>
+        </a>
+    </nav>
+    <div class="sidebar-footer">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="user-avatar" id="sidebarAvatar">U</span>
+            <div style="line-height:1.2">
+                <div class="text-white" style="font-size:12px" id="sidebarUserName">Guest</div>
+                <div style="font-size:11px" id="sidebarUserEmail">Not signed in</div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-light flex-fill" onclick="toggleDarkMode()" title="Dark mode"><i class="bi bi-moon-stars"></i></button>
+            <button class="btn btn-sm btn-outline-danger flex-fill" onclick="logoutUser()" title="Logout"><i class="bi bi-box-arrow-right"></i></button>
+        </div>
+        <div>Symbol Table MS v1.1</div>
+        <div>Compiler Design PBL</div>
+    </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div id="main">
+    <!-- TOP BAR -->
+    <div class="topbar">
+        <div>
+            <h3 id="pageTitle">Dashboard</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0" id="breadcrumb">
+                    <li class="breadcrumb-item"><a href="#">Home</a></li>
+                    <li class="breadcrumb-item active" id="bcActive">Dashboard</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary" onclick="openQuickSearch()" title="Quick Search (Ctrl+K)">
+                <i class="bi bi-search me-1"></i>Quick Search
+            </button>
+            <span class="badge bg-success" id="dbStatus"><i class="bi bi-circle-fill me-1"></i>Connected</span>
+            <span class="text-muted" style="font-size:13px" id="currentTime"></span>
+            <div class="user-chip">
+                <span class="user-avatar" id="topAvatar">U</span>
+                <span style="font-size:13px;font-weight:600" id="topUserName">User</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-area">
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <div class="section active" id="section-dashboard">
+            <div class="hero-banner">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2 class="fw-bold mb-1">Welcome, <span id="dashWelcomeName">User</span></h2>
+                        <p class="mb-3 opacity-75">A Compiler Design Project — manage programs, scopes, symbols, and semantic errors with ease.</p>
+                        <div class="quick-actions d-flex flex-wrap gap-2">
+                            <button class="btn btn-light btn-sm" onclick="showSection('programs',null)"><i class="bi bi-plus-circle me-1"></i>New Program</button>
+                            <button class="btn btn-outline-light btn-sm" onclick="showSection('analyzer',null)"><i class="bi bi-cpu me-1"></i>Analyze Code</button>
+                            <button class="btn btn-outline-light btn-sm" onclick="showSection('symbols',null)"><i class="bi bi-braces me-1"></i>Browse Symbols</button>
+                            <button class="btn btn-outline-light btn-sm" onclick="exportSymbolsCsv()"><i class="bi bi-download me-1"></i>Export CSV</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <i class="bi bi-braces" style="font-size:80px; opacity:0.2"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- STAT CARDS -->
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="icon-bg" style="background:#dbeafe"><i class="bi bi-file-earmark-code-fill" style="color:#1d4ed8"></i></div>
+                        <h2 id="statPrograms">-</h2>
+                        <p>Total Programs</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="icon-bg" style="background:#dcfce7"><i class="bi bi-diagram-3-fill" style="color:#15803d"></i></div>
+                        <h2 id="statScopes">-</h2>
+                        <p>Total Scopes</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="icon-bg" style="background:#fce7f3"><i class="bi bi-braces" style="color:#be185d"></i></div>
+                        <h2 id="statSymbols">-</h2>
+                        <p>Total Symbols</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="icon-bg" style="background:#fee2e2"><i class="bi bi-bug-fill" style="color:#dc2626"></i></div>
+                        <h2 id="statErrors">-</h2>
+                        <p>Active Errors</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- CHARTS ROW -->
+            <div class="row g-4 mb-4">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart-fill text-primary me-2"></i>Symbol Types</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="symbolTypeChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-success me-2"></i>Languages</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="langChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Error Types</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="errorTypeChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- RECENT PROGRAMS -->
+            <div class="card">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history text-primary me-2"></i>Recent Programs</h6>
+                    <button class="btn btn-primary btn-sm" onclick="showSection('programs', null)"><i class="bi bi-plus"></i> Add Program</button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead><tr>
+                            <th>Program Name</th><th>Language</th><th>Created</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody id="recentProgramsTable"><tr><td colspan="4" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== PROGRAMS ===================== -->
+        <div class="section" id="section-programs">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control" id="programSearch" placeholder="Search programs..." oninput="searchPrograms()" style="width:280px">
+                </div>
+                <button class="btn btn-primary" onclick="openProgramModal()">
+                    <i class="bi bi-plus-circle me-2"></i>New Program
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead><tr>
+                            <th>#</th><th>Program Name</th><th>Language</th><th>Scopes</th><th>Symbols</th><th>Errors</th><th>Created</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody id="programsTable"><tr><td colspan="8" class="text-center py-4 text-muted">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== SCOPES ===================== -->
+        <div class="section" id="section-scopes">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex gap-3">
+                    <select class="form-select" id="scopeProgramFilter" onchange="loadScopesByProgram()" style="width:220px">
+                        <option value="">All Programs</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="openScopeModal()">
+                    <i class="bi bi-plus-circle me-2"></i>New Scope
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead><tr>
+                            <th>#</th><th>Scope Name</th><th>Program</th><th>Level</th><th>Parent</th><th>Symbols</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody id="scopesTable"><tr><td colspan="7" class="text-center py-4 text-muted">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== SYMBOLS ===================== -->
+        <div class="section" id="section-symbols">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex gap-3 flex-wrap">
+                    <div class="search-box">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control" id="symbolSearch" placeholder="Search symbols..." oninput="searchSymbols()" style="width:240px">
+                    </div>
+                    <select class="form-select" id="symbolProgramFilter" onchange="filterSymbolsByProgram()" style="width:200px">
+                        <option value="">All Programs</option>
+                    </select>
+                    <select class="form-select" id="symbolTypeFilter" onchange="filterSymbolsByType()" style="width:160px">
+                        <option value="">All Types</option>
+                        <option>variable</option><option>function</option><option>constant</option>
+                        <option>parameter</option><option>array</option><option>pointer</option>
+                        <option>class</option><option>struct</option><option>enum</option><option>typedef</option>
+                    </select>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-success" onclick="exportSymbolsCsv()">
+                        <i class="bi bi-filetype-csv me-1"></i>Export CSV
+                    </button>
+                    <button class="btn btn-primary" onclick="openSymbolModal()">
+                        <i class="bi bi-plus-circle me-2"></i>Add Symbol
+                    </button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead><tr>
+                            <th>#</th><th>Name</th><th>Type</th><th>Data Type</th><th>Value</th><th>Scope</th><th>Program / Scope</th><th>Line</th><th>Initialized</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody id="symbolsTable"><tr><td colspan="10" class="text-center py-4 text-muted">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== ERRORS ===================== -->
+        <div class="section" id="section-errors">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex gap-3">
+                    <select class="form-select" id="errorProgramFilter" onchange="filterErrorsByProgram()" style="width:220px">
+                        <option value="">All Programs</option>
+                    </select>
+                    <select class="form-select" id="errorStatusFilter" onchange="filterErrorsByStatus()" style="width:160px">
+                        <option value="">All Statuses</option>
+                        <option value="0">Unresolved</option>
+                        <option value="1">Resolved</option>
+                    </select>
+                </div>
+                <button class="btn btn-danger" onclick="openErrorModal()">
+                    <i class="bi bi-plus-circle me-2"></i>Log Error
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead><tr>
+                            <th>#</th><th>Program</th><th>Error Type</th><th>Symbol</th><th>Line</th><th>Message</th><th>Status</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody id="errorsTable"><tr><td colspan="8" class="text-center py-4 text-muted">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== CODE ANALYZER ===================== -->
+        <div class="section" id="section-analyzer">
+            <div class="row g-4">
+                <div class="col-md-7">
+                    <div class="card">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-cpu-fill text-primary me-2"></i>Source Code Analyzer</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Select Program</label>
+                                    <select class="form-select" id="analyzerProgram">
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Language</label>
+                                    <select class="form-select" id="analyzerLang">
+                                        <option value="C">C</option>
+                                        <option value="C++">C++</option>
+                                        <option value="Java">Java</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <label class="form-label fw-semibold">Source Code</label>
+                            <textarea id="analyzerCode" class="form-control" style="display:none"></textarea>
+                            <div id="codeEditorWrapper"></div>
+                            <div class="d-flex gap-2 mt-3">
+                                <button class="btn btn-primary" onclick="analyzeCode()" id="analyzeBtn">
+                                    <i class="bi bi-play-circle-fill me-2"></i>Analyze Code
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="loadSampleCode()">
+                                    <i class="bi bi-code-slash me-2"></i>Load Sample
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="clearEditor()">
+                                    <i class="bi bi-trash me-2"></i>Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-terminal-fill text-success me-2"></i>Analysis Results</h6>
+                        </div>
+                        <div class="card-body" id="analyzerResults">
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-arrow-left-circle" style="font-size:40px; opacity:0.3"></i>
+                                <p class="mt-3">Paste your code and click Analyze</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== REPORTS ===================== -->
+        <div class="section" id="section-reports">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart-fill text-primary me-2"></i>Symbol Distribution</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="reportSymbolChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-success me-2"></i>Data Types Used</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="reportDataTypeChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-3-fill text-warning me-2"></i>Scope Usage</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="reportScopeChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Error Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container"><canvas id="reportErrorChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== PROFILE ===================== -->
+        <div class="section" id="section-profile">
+            <div class="row g-4">
+                <div class="col-md-5">
+                    <div class="card">
+                        <div class="card-body p-4 text-center">
+                            <div class="user-avatar mx-auto mb-3" id="profileAvatar" style="width:72px;height:72px;font-size:28px">U</div>
+                            <h4 class="fw-bold mb-1" id="profileName">User</h4>
+                            <p class="text-muted mb-3" id="profileEmail">email@example.com</p>
+                            <span class="info-pill mb-3"><i class="bi bi-shield-check"></i> Authenticated session</span>
+                            <div class="d-grid gap-2 mt-3">
+                                <button class="btn btn-outline-primary" onclick="switchAuthTab('forgot'); document.getElementById('authScreen').classList.remove('hidden');">
+                                    <i class="bi bi-key me-1"></i>Change Password via OTP
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="logoutUser()">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-7">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>Workspace Tips</h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="mb-0" style="line-height:1.9">
+                                <li>Use <strong>Quick Search</strong> (Ctrl+K) to jump to programs or symbols instantly.</li>
+                                <li>Export symbols as CSV from the Symbols page for reports.</li>
+                                <li>Toggle dark mode from the sidebar for late-night coding sessions.</li>
+                                <li>Forgot password sends a 6-digit OTP to your email (also saved in local OTP Inbox for XAMPP).</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /content-area -->
+</div><!-- /main -->
+
+<!-- ============ TOAST ============ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ============ QUICK SEARCH ============ -->
+<div class="modal fade" id="quickSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-body p-3">
+                <div class="search-box mb-3">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control" id="quickSearchInput" placeholder="Search programs or symbols..." oninput="runQuickSearch()">
+                </div>
+                <div id="quickSearchResults" class="list-group list-group-flush" style="max-height:320px;overflow:auto">
+                    <div class="text-muted text-center py-3">Type to search…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ PROGRAM MODAL ============ -->
+<div class="modal fade" id="programModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="programModalTitle"><i class="bi bi-file-earmark-code-fill me-2"></i>Add Program</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="programId">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-semibold">Program Name *</label>
+                        <input type="text" class="form-control" id="programName" placeholder="e.g. Hello World Program">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Language *</label>
+                        <select class="form-select" id="programLang">
+                            <option value="C">C</option>
+                            <option value="C++">C++</option>
+                            <option value="Java">Java</option>
+                            <option value="Python">Python</option>
+                            <option value="JavaScript">JavaScript</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Description</label>
+                        <input type="text" class="form-control" id="programDesc" placeholder="Brief description">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Source Code (optional)</label>
+                        <textarea class="form-control font-monospace" id="programCode" rows="6" placeholder="Paste source code here..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary px-4" onclick="saveProgram()" id="saveProgramBtn">
+                    <i class="bi bi-check-circle me-2"></i>Save Program
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ SCOPE MODAL ============ -->
+<div class="modal fade" id="scopeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="scopeModalTitle"><i class="bi bi-diagram-3-fill me-2"></i>Add Scope</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="scopeId">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Program *</label>
+                        <select class="form-select" id="scopeProgramId">
+                            <option value="">Select Program...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label fw-semibold">Scope Name *</label>
+                        <input type="text" class="form-control" id="scopeName" placeholder="e.g. main, global, func_add">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Scope Level</label>
+                        <input type="number" class="form-control" id="scopeLevel" value="1" min="0">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Description</label>
+                        <input type="text" class="form-control" id="scopeDesc" placeholder="Describe this scope">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary px-4" onclick="saveScope()">
+                    <i class="bi bi-check-circle me-2"></i>Save Scope
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ SYMBOL MODAL ============ -->
+<div class="modal fade" id="symbolModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="symbolModalTitle"><i class="bi bi-braces me-2"></i>Add Symbol</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="symbolId">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Scope / Table *</label>
+                        <select class="form-select" id="symbolTableId">
+                            <option value="">Select Scope...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Symbol Name *</label>
+                        <input type="text" class="form-control" id="symbolName" placeholder="e.g. x, counter, myFunc">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Symbol Type</label>
+                        <select class="form-select" id="symbolType">
+                            <option value="variable">Variable</option>
+                            <option value="function">Function</option>
+                            <option value="constant">Constant</option>
+                            <option value="parameter">Parameter</option>
+                            <option value="array">Array</option>
+                            <option value="pointer">Pointer</option>
+                            <option value="class">Class</option>
+                            <option value="struct">Struct</option>
+                            <option value="enum">Enum</option>
+                            <option value="typedef">Typedef</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Data Type *</label>
+                        <input type="text" class="form-control" id="symbolDataType" placeholder="int, float, char...">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Scope Level</label>
+                        <select class="form-select" id="symbolScope">
+                            <option value="local">Local</option>
+                            <option value="global">Global</option>
+                            <option value="parameter">Parameter</option>
+                            <option value="class">Class</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Value</label>
+                        <input type="text" class="form-control" id="symbolValue" placeholder="Initial value">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Line Number</label>
+                        <input type="number" class="form-control" id="symbolLine" placeholder="e.g. 5">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Size (bytes)</label>
+                        <input type="number" class="form-control" id="symbolSize" placeholder="e.g. 4">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Memory Address</label>
+                        <input type="text" class="form-control" id="symbolAddr" placeholder="e.g. 0x7fff5fbff5ac">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="symbolInit">
+                            <label class="form-check-label fw-semibold" for="symbolInit">Initialized</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="symbolDecl" checked>
+                            <label class="form-check-label fw-semibold" for="symbolDecl">Declared</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary px-4" onclick="saveSymbol()">
+                    <i class="bi bi-check-circle me-2"></i>Save Symbol
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ ERROR MODAL ============ -->
+<div class="modal fade" id="errorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-bug-fill me-2"></i>Log Compiler Error</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="errorId">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Program *</label>
+                        <select class="form-select" id="errorProgramId">
+                            <option value="">Select Program...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Error Type *</label>
+                        <select class="form-select" id="errorType">
+                            <option value="undeclared">Undeclared</option>
+                            <option value="redeclaration">Redeclaration</option>
+                            <option value="type_mismatch">Type Mismatch</option>
+                            <option value="scope_error">Scope Error</option>
+                            <option value="syntax_error">Syntax Error</option>
+                            <option value="semantic_error">Semantic Error</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Symbol</label>
+                        <input type="text" class="form-control" id="errorSymbol" placeholder="symbol name">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Line No.</label>
+                        <input type="number" class="form-control" id="errorLine">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Error Message *</label>
+                        <textarea class="form-control" id="errorMsg" rows="3" placeholder="Describe the error..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger px-4" onclick="saveError()">
+                    <i class="bi bi-bug-fill me-2"></i>Log Error
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ VIEW PROGRAM MODAL ============ -->
+<div class="modal fade" id="viewProgramModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="viewProgramTitle"><i class="bi bi-eye-fill me-2"></i>Program Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="viewProgramBody">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+
+<script>
+// ===========================
+// CONFIGURATION
+// ===========================
+const API_BASE = 'http://localhost/symbol-table-system/api';
+let codeEditor = null;
+let chartInstances = {};
+let allPrograms = [];
+let allScopes = [];
+let allSymbols = [];
+let allErrors = [];
+let currentUser = null;
+let resetContext = { email: '', reset_token: '' };
+
+// ===========================
+// UTILITIES
+// ===========================
+function getAuthToken() {
+    return localStorage.getItem('stms_token') || '';
+}
+
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json' }
+    };
+    const token = getAuthToken();
+    if (token) {
+        opts.headers['Authorization'] = 'Bearer ' + token;
+        opts.headers['X-Auth-Token'] = token;
+    }
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`${API_BASE}/${endpoint}`, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'API Error');
+    return data;
+}
+
+// ===========================
+// AUTH
+// ===========================
+function togglePass(id, btn) {
+    const el = document.getElementById(id);
+    el.type = el.type === 'password' ? 'text' : 'password';
+    btn.innerHTML = el.type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+}
+
+function switchAuthTab(tab) {
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    document.querySelectorAll('#authTabs button').forEach(b => b.classList.remove('active'));
+    const map = {
+        login: { form: 'formLogin', title: 'Welcome back', sub: 'Sign in to continue to your workspace', tabIdx: 0 },
+        register: { form: 'formRegister', title: 'Create account', sub: 'Register to start managing symbol tables', tabIdx: 1 },
+        forgot: { form: 'formForgot', title: 'Forgot password', sub: 'We will email a 6-digit OTP to reset access', tabIdx: -1 },
+        otp: { form: 'formOtp', title: 'Verify OTP', sub: 'Confirm the code sent to your email', tabIdx: -1 },
+        reset: { form: 'formReset', title: 'Set new password', sub: 'Choose a strong password for your account', tabIdx: -1 }
+    };
+    const conf = map[tab] || map.login;
+    document.getElementById(conf.form).classList.add('active');
+    document.getElementById('authTitle').textContent = conf.title;
+    document.getElementById('authSubtitle').textContent = conf.sub;
+    document.getElementById('authTabs').style.display = conf.tabIdx >= 0 ? 'flex' : 'none';
+    if (conf.tabIdx >= 0) document.querySelectorAll('#authTabs button')[conf.tabIdx].classList.add('active');
+}
+
+function applyUserUI(user) {
+    currentUser = user;
+    const initials = (user.full_name || 'U').split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+    ['sidebarAvatar','topAvatar','profileAvatar'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = initials;
+    });
+    const nameEls = ['sidebarUserName','topUserName','profileName','dashWelcomeName'];
+    nameEls.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = user.full_name; });
+    const emailEls = ['sidebarUserEmail','profileEmail'];
+    emailEls.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = user.email; });
+}
+
+function showApp() {
+    document.getElementById('authScreen').classList.add('hidden');
+}
+
+function showAuth() {
+    document.getElementById('authScreen').classList.remove('hidden');
+    switchAuthTab('login');
+}
+
+async function submitLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    try {
+        const data = await apiCall('auth.php?action=login', 'POST', {
+            email: document.getElementById('loginEmail').value.trim(),
+            password: document.getElementById('loginPassword').value
+        });
+        localStorage.setItem('stms_token', data.token);
+        applyUserUI(data.user);
+        showApp();
+        showToast('Welcome, ' + data.user.full_name);
+        initAppData();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+    return false;
+}
+
+async function submitRegister(e) {
+    e.preventDefault();
+    try {
+        const data = await apiCall('auth.php?action=register', 'POST', {
+            full_name: document.getElementById('regName').value.trim(),
+            email: document.getElementById('regEmail').value.trim(),
+            password: document.getElementById('regPassword').value,
+            confirm_password: document.getElementById('regConfirm').value
+        });
+        localStorage.setItem('stms_token', data.token);
+        applyUserUI(data.user);
+        showApp();
+        showToast('Account created successfully');
+        initAppData();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+    return false;
+}
+
+async function submitForgot(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgotEmail').value.trim();
+    try {
+        const data = await apiCall('auth.php?action=forgot', 'POST', { email });
+        resetContext.email = email;
+        document.getElementById('otpEmailLabel').textContent = email;
+        showToast(data.message || 'OTP sent');
+        switchAuthTab('otp');
+        await loadOtpInbox();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+    return false;
+}
+
+async function loadOtpInbox() {
+    const email = resetContext.email || document.getElementById('forgotEmail')?.value || document.getElementById('otpEmailLabel')?.textContent || '';
+    if (!email) return;
+    try {
+        const data = await apiCall('auth.php?action=inbox&email=' + encodeURIComponent(email));
+        const html = data.emails && data.emails.length
+            ? data.emails.map(m => `<div class="mb-2"><strong>${m.subject}</strong><br><span class="text-muted">${m.created_at}</span>${m.otp ? `<div class="mt-1">OTP: <code style="font-size:16px">${m.otp}</code> <button type="button" class="btn btn-sm btn-outline-primary ms-1" onclick="document.getElementById('otpCode').value='${m.otp}'">Use</button>` : ''}</div>`).join('')
+            : '<div>No OTP emails found yet for this address.</div>';
+        ['otpInboxBox','otpInboxBox2'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.style.display = 'block'; el.innerHTML = '<div class="fw-semibold mb-1">Local OTP Inbox (XAMPP)</div>' + html; }
+        });
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function submitVerifyOtp(e) {
+    e.preventDefault();
+    try {
+        const data = await apiCall('auth.php?action=verify_otp', 'POST', {
+            email: resetContext.email,
+            otp: document.getElementById('otpCode').value.trim()
+        });
+        resetContext.reset_token = data.reset_token;
+        showToast('OTP verified');
+        switchAuthTab('reset');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+    return false;
+}
+
+async function submitReset(e) {
+    e.preventDefault();
+    try {
+        await apiCall('auth.php?action=reset', 'POST', {
+            email: resetContext.email,
+            reset_token: resetContext.reset_token,
+            password: document.getElementById('resetPassword').value,
+            confirm_password: document.getElementById('resetConfirm').value
+        });
+        showToast('Password updated. Please login.');
+        switchAuthTab('login');
+        document.getElementById('loginEmail').value = resetContext.email;
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+    return false;
+}
+
+async function logoutUser() {
+    try { await apiCall('auth.php?action=logout', 'POST', {}); } catch(e) {}
+    localStorage.removeItem('stms_token');
+    currentUser = null;
+    showAuth();
+    showToast('Logged out');
+}
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    localStorage.setItem('stms_dark', document.body.classList.contains('dark-mode') ? '1' : '0');
+}
+
+function openQuickSearch() {
+    const modal = new bootstrap.Modal(document.getElementById('quickSearchModal'));
+    modal.show();
+    setTimeout(() => document.getElementById('quickSearchInput').focus(), 250);
+}
+
+async function runQuickSearch() {
+    const q = (document.getElementById('quickSearchInput').value || '').toLowerCase().trim();
+    const box = document.getElementById('quickSearchResults');
+    if (!q) { box.innerHTML = '<div class="text-muted text-center py-3">Type to search…</div>'; return; }
+    if (!allPrograms.length) {
+        try { allPrograms = await apiCall('programs.php'); } catch(e) {}
+    }
+    if (!allSymbols.length) {
+        try { allSymbols = await apiCall('symbols.php'); } catch(e) {}
+    }
+    const programs = allPrograms.filter(p => (p.program_name||'').toLowerCase().includes(q) || (p.language||'').toLowerCase().includes(q)).slice(0,6);
+    const symbols = allSymbols.filter(s => (s.name||'').toLowerCase().includes(q) || (s.type||'').toLowerCase().includes(q)).slice(0,8);
+    let html = '';
+    programs.forEach(p => {
+        html += `<button type="button" class="list-group-item list-group-item-action" onclick="bootstrap.Modal.getInstance(document.getElementById('quickSearchModal')).hide(); showSection('programs',null);"><i class="bi bi-file-earmark-code text-primary me-2"></i>${p.program_name} <small class="text-muted">(${p.language})</small></button>`;
+    });
+    symbols.forEach(s => {
+        html += `<button type="button" class="list-group-item list-group-item-action" onclick="bootstrap.Modal.getInstance(document.getElementById('quickSearchModal')).hide(); showSection('symbols',null);"><i class="bi bi-braces text-success me-2"></i>${s.name} ${typeBadge(s.type)}</button>`;
+    });
+    box.innerHTML = html || '<div class="text-muted text-center py-3">No matches found</div>';
+}
+
+async function exportSymbolsCsv() {
+    try {
+        if (!allSymbols.length) allSymbols = await apiCall('symbols.php');
+        const headers = ['name','type','data_type','scope','value','line_number','program_name','scope_name'];
+        const lines = [headers.join(',')];
+        allSymbols.forEach(s => {
+            lines.push(headers.map(h => `"${String(s[h] ?? '').replace(/"/g,'""')}"`).join(','));
+        });
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'symbols_export.csv'; a.click();
+        URL.revokeObjectURL(url);
+        showToast('Symbols exported to CSV');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function showToast(msg, type = 'success') {
+    const id = 'toast_' + Date.now();
+    const icon = type === 'success' ? 'check-circle-fill' : type === 'error' ? 'x-circle-fill' : 'info-circle-fill';
+    const bg = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-primary';
+    const html = `<div id="${id}" class="toast align-items-center text-white ${bg} border-0 mb-2 show" style="border-radius:10px;min-width:260px">
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2">
+                <i class="bi bi-${icon}"></i> ${msg}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.closest('.toast').remove()"></button>
+        </div>
+    </div>`;
+    document.getElementById('toastContainer').insertAdjacentHTML('beforeend', html);
+    setTimeout(() => { const el = document.getElementById(id); if(el) el.remove(); }, 3500);
+}
+
+function typeBadge(type) {
+    return `<span class="type-badge type-${type}">${type}</span>`;
+}
+
+function langBadge(lang) {
+    const colors = {C:'primary',Python:'warning','C++':'success',Java:'danger',JavaScript:'dark'};
+    return `<span class="badge bg-${colors[lang]||'secondary'}">${lang}</span>`;
+}
+
+function formatDate(d) {
+    if (!d) return '-';
+    return new Date(d).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+}
+
+function truncate(str, n=30) {
+    return str && str.length > n ? str.substring(0, n) + '...' : (str || '-');
+}
+
+function updateClock() {
+    const now = new Date();
+    document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-IN');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ===========================
+// NAVIGATION
+// ===========================
+function showSection(name, link) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById('section-' + name).classList.add('active');
+    document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+    if (link) link.classList.add('active');
+    else {
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            if (a.getAttribute('onclick') && a.getAttribute('onclick').includes("'"+name+"'")) a.classList.add('active');
+        });
+    }
+    const titles = {
+        dashboard: 'Dashboard', programs: 'Programs', scopes: 'Scopes / Symbol Tables',
+        symbols: 'Symbols', errors: 'Error Log', analyzer: 'Code Analyzer', reports: 'Reports',
+        profile: 'My Profile'
+    };
+    document.getElementById('pageTitle').textContent = titles[name] || name;
+    document.getElementById('bcActive').textContent = titles[name] || name;
+    
+    // Load section data
+    if (name === 'dashboard') loadDashboard();
+    if (name === 'programs') loadPrograms();
+    if (name === 'scopes') loadScopes();
+    if (name === 'symbols') loadSymbols();
+    if (name === 'errors') loadErrors();
+    if (name === 'analyzer') initAnalyzer();
+    if (name === 'reports') loadReports();
+    if (name === 'profile' && currentUser) applyUserUI(currentUser);
+}
+
+// ===========================
+// CHARTS
+// ===========================
+function destroyChart(id) {
+    if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+function createChart(id, type, labels, data, colors, label='Count') {
+    destroyChart(id);
+    const ctx = document.getElementById(id).getContext('2d');
+    chartInstances[id] = new Chart(ctx, {
+        type,
+        data: {
+            labels,
+            datasets: [{
+                label,
+                data,
+                backgroundColor: colors,
+                borderColor: type === 'line' ? colors : undefined,
+                borderWidth: type === 'bar' ? 0 : 2,
+                borderRadius: type === 'bar' ? 6 : 0,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: type === 'pie' || type === 'doughnut' ? 'right' : 'top', labels: { font: { size: 11 }, boxWidth: 12 } } },
+            scales: (type === 'bar' || type === 'line') ? {
+                y: { grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+            } : {}
+        }
+    });
+}
+
+const COLORS = ['#0d6efd','#198754','#dc3545','#ffc107','#6610f2','#0dcaf0','#fd7e14','#6f42c1','#20c997','#d63384'];
+
+// ===========================
+// DASHBOARD
+// ===========================
+async function loadDashboard() {
+    try {
+        const stats = await apiCall('stats.php');
+        document.getElementById('statPrograms').textContent = stats.total_programs;
+        document.getElementById('statScopes').textContent = stats.total_scopes;
+        document.getElementById('statSymbols').textContent = stats.total_symbols;
+        document.getElementById('statErrors').textContent = stats.total_errors;
+
+        // Symbol type chart
+        const stLabels = stats.symbol_type_breakdown.map(r => r.type);
+        const stData = stats.symbol_type_breakdown.map(r => parseInt(r.count));
+        createChart('symbolTypeChart', 'doughnut', stLabels, stData, COLORS.slice(0, stLabels.length));
+
+        // Language chart
+        const lLabels = stats.language_breakdown.map(r => r.language);
+        const lData = stats.language_breakdown.map(r => parseInt(r.count));
+        createChart('langChart', 'bar', lLabels, lData, COLORS.slice(0, lLabels.length));
+
+        // Error chart
+        const eLabels = stats.error_type_breakdown.map(r => r.error_type.replace('_',' '));
+        const eData = stats.error_type_breakdown.map(r => parseInt(r.count));
+        createChart('errorTypeChart', 'pie', eLabels, eData, ['#dc3545','#fd7e14','#ffc107','#6610f2','#0dcaf0','#20c997']);
+
+        // Recent programs
+        const tbody = document.getElementById('recentProgramsTable');
+        if (stats.recent_programs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No programs yet</td></tr>';
+        } else {
+            tbody.innerHTML = stats.recent_programs.map(p => `
+                <tr>
+                    <td><strong>${p.program_name}</strong></td>
+                    <td>${langBadge(p.language)}</td>
+                    <td>${formatDate(p.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewProgram(${p.id})"><i class="bi bi-eye"></i></button>
+                    </td>
+                </tr>`).join('');
+        }
+    } catch(e) {
+        document.getElementById('statPrograms').textContent = '!';
+        showToast('Could not connect to API. Is XAMPP running?', 'error');
+    }
+}
+
+// ===========================
+// PROGRAMS
+// ===========================
+let searchTimer = null;
+function searchPrograms() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadPrograms, 400);
+}
+
+async function loadPrograms() {
+    const q = document.getElementById('programSearch').value;
+    try {
+        const data = await apiCall('programs.php' + (q ? `?search=${encodeURIComponent(q)}` : ''));
+        allPrograms = data;
+        renderPrograms(data);
+        populateProgramDropdowns();
+    } catch(e) { showToast('Failed to load programs', 'error'); }
+}
+
+function renderPrograms(programs) {
+    const tbody = document.getElementById('programsTable');
+    if (!programs.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No programs found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = programs.map((p, i) => `
+        <tr>
+            <td class="text-muted">${i+1}</td>
+            <td><strong>${p.program_name}</strong><br><small class="text-muted">${truncate(p.description, 40)}</small></td>
+            <td>${langBadge(p.language)}</td>
+            <td><span class="badge bg-light text-dark">${p.scope_count||0}</span></td>
+            <td><span class="badge bg-light text-dark">${p.symbol_count||0}</span></td>
+            <td>${p.active_errors > 0 ? `<span class="badge bg-danger">${p.active_errors}</span>` : '<span class="badge bg-success">0</span>'}</td>
+            <td class="text-muted">${formatDate(p.created_at)}</td>
+            <td>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-info" onclick="viewProgram(${p.id})" title="View"><i class="bi bi-eye"></i></button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editProgram(${p.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteProgram(${p.id})" title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+function openProgramModal(data = null) {
+    document.getElementById('programId').value = data ? data.id : '';
+    document.getElementById('programName').value = data ? data.program_name : '';
+    document.getElementById('programLang').value = data ? data.language : 'C';
+    document.getElementById('programDesc').value = data ? (data.description || '') : '';
+    document.getElementById('programCode').value = data ? (data.source_code || '') : '';
+    document.getElementById('programModalTitle').innerHTML = data
+        ? '<i class="bi bi-pencil-fill me-2"></i>Edit Program'
+        : '<i class="bi bi-file-earmark-code-fill me-2"></i>Add Program';
+    new bootstrap.Modal(document.getElementById('programModal')).show();
+}
+
+async function editProgram(id) {
+    try {
+        const data = await apiCall(`programs.php?id=${id}`);
+        openProgramModal(data);
+    } catch(e) { showToast('Failed to load program', 'error'); }
+}
+
+async function saveProgram() {
+    const id = document.getElementById('programId').value;
+    const payload = {
+        program_name: document.getElementById('programName').value.trim(),
+        language: document.getElementById('programLang').value,
+        description: document.getElementById('programDesc').value,
+        source_code: document.getElementById('programCode').value
+    };
+    if (!payload.program_name) { showToast('Program name required', 'error'); return; }
+    const btn = document.getElementById('saveProgramBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="loader me-2"></span>Saving...';
+    try {
+        if (id) await apiCall(`programs.php?id=${id}`, 'PUT', payload);
+        else await apiCall('programs.php', 'POST', payload);
+        bootstrap.Modal.getInstance(document.getElementById('programModal')).hide();
+        showToast(id ? 'Program updated!' : 'Program created!');
+        loadPrograms();
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Save Program'; }
+}
+
+async function deleteProgram(id) {
+    if (!confirm('Delete this program and all its symbols? This cannot be undone.')) return;
+    try {
+        await apiCall(`programs.php?id=${id}`, 'DELETE');
+        showToast('Program deleted');
+        loadPrograms();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function viewProgram(id) {
+    try {
+        const p = await apiCall(`programs.php?id=${id}`);
+        const symbols = await apiCall(`symbols.php?program_id=${id}`);
+        const scopes = await apiCall(`scopes.php?program_id=${id}`);
+        const errors = await apiCall(`errors.php?program_id=${id}`);
+        
+        document.getElementById('viewProgramTitle').innerHTML = `<i class="bi bi-eye-fill me-2"></i>${p.program_name}`;
+        document.getElementById('viewProgramBody').innerHTML = `
+            <div class="row g-3 mb-4">
+                <div class="col-md-3"><div class="p-3 rounded-3 text-center" style="background:#f0f7ff">
+                    <div class="fw-bold fs-4 text-primary">${p.scope_count}</div><div class="text-muted small">Scopes</div>
+                </div></div>
+                <div class="col-md-3"><div class="p-3 rounded-3 text-center" style="background:#f0fdf4">
+                    <div class="fw-bold fs-4 text-success">${p.symbol_count}</div><div class="text-muted small">Symbols</div>
+                </div></div>
+                <div class="col-md-3"><div class="p-3 rounded-3 text-center" style="background:#fef2f2">
+                    <div class="fw-bold fs-4 text-danger">${p.error_count}</div><div class="text-muted small">Errors</div>
+                </div></div>
+                <div class="col-md-3"><div class="p-3 rounded-3 text-center" style="background:#fffbeb">
+                    <div class="fw-bold fs-4 text-warning">${langBadge(p.language)}</div><div class="text-muted small">Language</div>
+                </div></div>
+            </div>
+            ${p.source_code ? `<div class="mb-4"><h6 class="fw-bold">Source Code</h6><div class="source-preview">${escHtml(p.source_code)}</div></div>` : ''}
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <h6 class="fw-bold">Scopes</h6>
+                    <ul class="scope-tree">${scopes.map(s => `<li><strong>${s.scope_name}</strong> <span class="text-muted small">(Level ${s.scope_level})</span> — ${s.symbol_count} symbols</li>`).join('')}</ul>
+                </div>
+                <div class="col-md-8">
+                    <h6 class="fw-bold">Symbols</h6>
+                    <div style="max-height:300px;overflow-y:auto">
+                    <table class="table table-sm">
+                        <thead><tr><th>Name</th><th>Type</th><th>Data Type</th><th>Value</th><th>Scope</th></tr></thead>
+                        <tbody>${symbols.map(s => `<tr><td><strong>${s.name}</strong></td><td>${typeBadge(s.type)}</td><td><code>${s.data_type}</code></td><td>${s.value||'-'}</td><td>${s.scope_name}</td></tr>`).join('')}</tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+            ${errors.length ? `
+            <div class="mt-3">
+                <h6 class="fw-bold">Errors</h6>
+                ${errors.map(e => `<div class="alert ${e.is_resolved?'alert-success':'alert-danger'} py-2 mb-2">
+                    <strong>${e.error_type}</strong> ${e.symbol_name?`<code>${e.symbol_name}</code>`:''} ${e.line_number?`Line ${e.line_number}`:''}: ${e.message}
+                </div>`).join('')}
+            </div>` : ''}
+        `;
+        new bootstrap.Modal(document.getElementById('viewProgramModal')).show();
+    } catch(e) { showToast('Failed to load details', 'error'); }
+}
+
+function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ===========================
+// SCOPES
+// ===========================
+async function loadScopes() {
+    try {
+        const pid = document.getElementById('scopeProgramFilter').value;
+        const data = pid
+            ? await apiCall(`scopes.php?program_id=${pid}`)
+            : await apiCall('scopes.php');
+        allScopes = data;
+        renderScopes(data);
+    } catch(e) { showToast('Failed to load scopes', 'error'); }
+}
+
+async function loadScopesByProgram() { await loadScopes(); }
+
+function renderScopes(scopes) {
+    const tbody = document.getElementById('scopesTable');
+    if (!scopes.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No scopes found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = scopes.map((s, i) => {
+        const prog = allPrograms.find(p => p.id == s.program_id);
+        return `<tr>
+            <td class="text-muted">${i+1}</td>
+            <td><strong>${s.scope_name}</strong></td>
+            <td>${prog ? `<small>${langBadge(prog.language)}</small> ${prog.program_name}` : (s.program_name || s.program_id)}</td>
+            <td><span class="badge bg-secondary">Level ${s.scope_level}</span></td>
+            <td>${s.parent_scope_id ? `<span class="text-muted small">#${s.parent_scope_id}</span>` : '<span class="text-muted">-</span>'}</td>
+            <td><span class="badge bg-light text-dark">${s.symbol_count||0}</span></td>
+            <td>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editScope(${s.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteScope(${s.id})" title="Delete"><i class="bi bi-trash"></i></button>
+                    <button class="btn btn-sm btn-outline-success" onclick="viewScopeSymbols(${s.id}, '${s.scope_name}')" title="View Symbols"><i class="bi bi-braces"></i></button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openScopeModal(data=null) {
+    document.getElementById('scopeId').value = data ? data.id : '';
+    document.getElementById('scopeName').value = data ? data.scope_name : '';
+    document.getElementById('scopeLevel').value = data ? data.scope_level : 1;
+    document.getElementById('scopeDesc').value = data ? (data.description||'') : '';
+    if (data && data.program_id) document.getElementById('scopeProgramId').value = data.program_id;
+    document.getElementById('scopeModalTitle').innerHTML = data
+        ? '<i class="bi bi-pencil-fill me-2"></i>Edit Scope'
+        : '<i class="bi bi-diagram-3-fill me-2"></i>Add Scope';
+    new bootstrap.Modal(document.getElementById('scopeModal')).show();
+}
+
+async function editScope(id) {
+    const s = allScopes.find(s => s.id == id) || await apiCall(`scopes.php?id=${id}`);
+    openScopeModal(s);
+}
+
+async function saveScope() {
+    const id = document.getElementById('scopeId').value;
+    const payload = {
+        program_id: document.getElementById('scopeProgramId').value,
+        scope_name: document.getElementById('scopeName').value.trim(),
+        scope_level: parseInt(document.getElementById('scopeLevel').value) || 1,
+        description: document.getElementById('scopeDesc').value
+    };
+    if (!payload.scope_name || !payload.program_id) { showToast('Program and scope name required', 'error'); return; }
+    try {
+        if (id) await apiCall(`scopes.php?id=${id}`, 'PUT', payload);
+        else await apiCall('scopes.php', 'POST', payload);
+        bootstrap.Modal.getInstance(document.getElementById('scopeModal')).hide();
+        showToast(id ? 'Scope updated!' : 'Scope created!');
+        loadScopes();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteScope(id) {
+    if (!confirm('Delete this scope and all its symbols?')) return;
+    try {
+        await apiCall(`scopes.php?id=${id}`, 'DELETE');
+        showToast('Scope deleted');
+        loadScopes();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function viewScopeSymbols(tableId, scopeName) {
+    showSection('symbols', null);
+    document.getElementById('symbolSearch').value = '';
+    try {
+        const data = await apiCall(`symbols.php?table_id=${tableId}`);
+        allSymbols = data;
+        renderSymbols(data);
+        showToast(`Showing ${data.length} symbols from scope: ${scopeName}`, 'info');
+    } catch(e) {}
+}
+
+// ===========================
+// SYMBOLS
+// ===========================
+async function loadSymbols() {
+    try {
+        const pid = document.getElementById('symbolProgramFilter').value;
+        const q = document.getElementById('symbolSearch').value;
+        let data;
+        if (q) data = await apiCall(`symbols.php?search=${encodeURIComponent(q)}`);
+        else if (pid) data = await apiCall(`symbols.php?program_id=${pid}`);
+        else data = await apiCall('symbols.php');
+        allSymbols = data;
+        applySymbolTypeFilter(data);
+    } catch(e) { showToast('Failed to load symbols', 'error'); }
+}
+
+function applySymbolTypeFilter(data) {
+    const type = document.getElementById('symbolTypeFilter').value;
+    renderSymbols(type ? data.filter(s => s.type === type) : data);
+}
+
+function filterSymbolsByProgram() { loadSymbols(); }
+function filterSymbolsByType() { applySymbolTypeFilter(allSymbols); }
+let symbolSearchTimer;
+function searchSymbols() {
+    clearTimeout(symbolSearchTimer);
+    symbolSearchTimer = setTimeout(loadSymbols, 400);
+}
+
+function renderSymbols(symbols) {
+    const tbody = document.getElementById('symbolsTable');
+    if (!symbols.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No symbols found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = symbols.map((s, i) => `
+        <tr class="symbol-row" onclick="viewSymbolDetail(${s.id})">
+            <td class="text-muted">${i+1}</td>
+            <td><strong>${s.name}</strong></td>
+            <td>${typeBadge(s.type)}</td>
+            <td><code class="text-primary">${s.data_type}</code></td>
+            <td class="text-muted">${s.value ? `<code>${s.value}</code>` : '-'}</td>
+            <td><span class="badge bg-secondary">${s.scope}</span></td>
+            <td class="text-muted"><small>${s.program_name||''} / ${s.scope_name||''}</small></td>
+            <td class="text-muted">${s.line_number || '-'}</td>
+            <td>${s.is_initialized
+                ? '<span class="badge bg-success"><i class="bi bi-check"></i> Yes</span>'
+                : '<span class="badge bg-warning text-dark"><i class="bi bi-x"></i> No</span>'
+            }</td>
+            <td onclick="event.stopPropagation()">
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editSymbol(${s.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSymbol(${s.id})" title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+function openSymbolModal(data=null) {
+    document.getElementById('symbolId').value = data ? data.id : '';
+    document.getElementById('symbolName').value = data ? data.name : '';
+    document.getElementById('symbolType').value = data ? data.type : 'variable';
+    document.getElementById('symbolDataType').value = data ? data.data_type : '';
+    document.getElementById('symbolScope').value = data ? data.scope : 'local';
+    document.getElementById('symbolValue').value = data ? (data.value||'') : '';
+    document.getElementById('symbolLine').value = data ? (data.line_number||'') : '';
+    document.getElementById('symbolSize').value = data ? (data.size_bytes||'') : '';
+    document.getElementById('symbolAddr').value = data ? (data.memory_address||'') : '';
+    document.getElementById('symbolInit').checked = data ? !!parseInt(data.is_initialized) : false;
+    document.getElementById('symbolDecl').checked = data ? !!parseInt(data.is_declared) : true;
+    if (data && data.table_id) document.getElementById('symbolTableId').value = data.table_id;
+    document.getElementById('symbolModalTitle').innerHTML = data
+        ? '<i class="bi bi-pencil-fill me-2"></i>Edit Symbol'
+        : '<i class="bi bi-braces me-2"></i>Add Symbol';
+    new bootstrap.Modal(document.getElementById('symbolModal')).show();
+}
+
+async function editSymbol(id) {
+    try {
+        const data = await apiCall(`symbols.php?id=${id}`);
+        openSymbolModal(data);
+    } catch(e) { showToast('Failed to load symbol', 'error'); }
+}
+
+async function saveSymbol() {
+    const id = document.getElementById('symbolId').value;
+    const payload = {
+        table_id: document.getElementById('symbolTableId').value,
+        name: document.getElementById('symbolName').value.trim(),
+        type: document.getElementById('symbolType').value,
+        data_type: document.getElementById('symbolDataType').value.trim(),
+        scope: document.getElementById('symbolScope').value,
+        value: document.getElementById('symbolValue').value || null,
+        line_number: document.getElementById('symbolLine').value || null,
+        size_bytes: document.getElementById('symbolSize').value || null,
+        memory_address: document.getElementById('symbolAddr').value || null,
+        is_initialized: document.getElementById('symbolInit').checked ? 1 : 0,
+        is_declared: document.getElementById('symbolDecl').checked ? 1 : 0
+    };
+    if (!payload.table_id || !payload.name || !payload.data_type) { showToast('Scope, name, data type required', 'error'); return; }
+    try {
+        if (id) await apiCall(`symbols.php?id=${id}`, 'PUT', payload);
+        else await apiCall('symbols.php', 'POST', payload);
+        bootstrap.Modal.getInstance(document.getElementById('symbolModal')).hide();
+        showToast(id ? 'Symbol updated!' : 'Symbol added!');
+        loadSymbols();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteSymbol(id) {
+    if (!confirm('Delete this symbol?')) return;
+    try {
+        await apiCall(`symbols.php?id=${id}`, 'DELETE');
+        showToast('Symbol deleted');
+        loadSymbols();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function viewSymbolDetail(id) {
+    try {
+        const s = await apiCall(`symbols.php?id=${id}`);
+        const refs = s.references || [];
+        const content = `<div class="p-3">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                ${typeBadge(s.type)}
+                <span class="info-pill"><i class="bi bi-code"></i>${s.data_type}</span>
+                <span class="info-pill"><i class="bi bi-layers"></i>${s.scope}</span>
+                ${s.line_number ? `<span class="info-pill"><i class="bi bi-hash"></i>Line ${s.line_number}</span>` : ''}
+                ${s.memory_address ? `<span class="info-pill"><i class="bi bi-cpu"></i>${s.memory_address}</span>` : ''}
+                ${s.size_bytes ? `<span class="info-pill"><i class="bi bi-hdd"></i>${s.size_bytes} bytes</span>` : ''}
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-md-6"><strong>Program:</strong> ${s.program_name||'-'}</div>
+                <div class="col-md-6"><strong>Scope:</strong> ${s.scope_name||'-'}</div>
+                <div class="col-md-6"><strong>Value:</strong> ${s.value ? `<code>${s.value}</code>` : 'null'}</div>
+                <div class="col-md-6"><strong>Initialized:</strong> ${s.is_initialized?'✅ Yes':'❌ No'}</div>
+            </div>
+            ${refs.length ? `
+            <h6 class="fw-bold">References (${refs.length})</h6>
+            <table class="table table-sm">
+                <thead><tr><th>Line</th><th>Type</th><th>Context</th></tr></thead>
+                <tbody>${refs.map(r => `<tr><td>${r.line_number}</td><td><span class="badge bg-secondary">${r.reference_type}</span></td><td><code>${r.context||'-'}</code></td></tr>`).join('')}</tbody>
+            </table>` : '<p class="text-muted small">No references logged.</p>'}
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary btn-sm" onclick="editSymbol(${s.id})"><i class="bi bi-pencil me-1"></i>Edit</button>
+                <button class="btn btn-outline-danger btn-sm" onclick="deleteSymbol(${s.id})"><i class="bi bi-trash me-1"></i>Delete</button>
+            </div>
+        </div>`;
+        document.getElementById('viewProgramTitle').innerHTML = `<i class="bi bi-braces me-2"></i><code>${s.name}</code> — Symbol Detail`;
+        document.getElementById('viewProgramBody').innerHTML = content;
+        new bootstrap.Modal(document.getElementById('viewProgramModal')).show();
+    } catch(e) {}
+}
+
+// ===========================
+// ERRORS
+// ===========================
+async function loadErrors() {
+    try {
+        const pid = document.getElementById('errorProgramFilter').value;
+        let data = pid ? await apiCall(`errors.php?program_id=${pid}`) : await apiCall('errors.php');
+        allErrors = data;
+        const status = document.getElementById('errorStatusFilter').value;
+        if (status !== '') data = data.filter(e => e.is_resolved == status);
+        renderErrors(data);
+    } catch(e) { showToast('Failed to load errors', 'error'); }
+}
+
+function filterErrorsByProgram() { loadErrors(); }
+function filterErrorsByStatus() { loadErrors(); }
+
+function renderErrors(errors) {
+    const tbody = document.getElementById('errorsTable');
+    if (!errors.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No errors found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = errors.map((e, i) => `
+        <tr class="${e.is_resolved ? 'error-resolved' : 'error-unresolved'}">
+            <td>${i+1}</td>
+            <td>${e.program_name || e.program_id}</td>
+            <td><span class="badge bg-${errColor(e.error_type)}">${e.error_type.replace('_',' ')}</span></td>
+            <td>${e.symbol_name ? `<code>${e.symbol_name}</code>` : '-'}</td>
+            <td>${e.line_number || '-'}</td>
+            <td class="text-muted"><small>${e.message}</small></td>
+            <td>${e.is_resolved
+                ? '<span class="badge bg-success"><i class="bi bi-check me-1"></i>Resolved</span>'
+                : '<span class="badge bg-danger"><i class="bi bi-exclamation me-1"></i>Open</span>'
+            }</td>
+            <td>
+                <div class="d-flex gap-1">
+                    ${!e.is_resolved ? `<button class="btn btn-sm btn-outline-success" onclick="resolveError(${e.id})" title="Resolve"><i class="bi bi-check-circle"></i></button>` : ''}
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteError(${e.id})" title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+function errColor(type) {
+    const m = {undeclared:'danger',redeclaration:'warning',type_mismatch:'info',scope_error:'dark',syntax_error:'secondary',semantic_error:'primary'};
+    return m[type] || 'secondary';
+}
+
+function openErrorModal() {
+    document.getElementById('errorId').value = '';
+    document.getElementById('errorMsg').value = '';
+    document.getElementById('errorSymbol').value = '';
+    document.getElementById('errorLine').value = '';
+    new bootstrap.Modal(document.getElementById('errorModal')).show();
+}
+
+async function saveError() {
+    const payload = {
+        program_id: document.getElementById('errorProgramId').value,
+        error_type: document.getElementById('errorType').value,
+        symbol_name: document.getElementById('errorSymbol').value || null,
+        line_number: document.getElementById('errorLine').value || null,
+        message: document.getElementById('errorMsg').value.trim()
+    };
+    if (!payload.program_id || !payload.message) { showToast('Program and message required', 'error'); return; }
+    try {
+        await apiCall('errors.php', 'POST', payload);
+        bootstrap.Modal.getInstance(document.getElementById('errorModal')).hide();
+        showToast('Error logged!');
+        loadErrors();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function resolveError(id) {
+    try {
+        await apiCall(`errors.php?id=${id}`, 'PUT', { is_resolved: 1 });
+        showToast('Error marked resolved');
+        loadErrors();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteError(id) {
+    if (!confirm('Delete this error entry?')) return;
+    try {
+        await apiCall(`errors.php?id=${id}`, 'DELETE');
+        showToast('Error deleted');
+        loadErrors();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ===========================
+// SHARED DROPDOWNS
+// ===========================
+function populateProgramDropdowns() {
+    const selects = ['scopeProgramFilter','scopeProgramId','symbolProgramFilter','analyzerProgram','errorProgramFilter','errorProgramId'];
+    selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const hasAll = id.endsWith('Filter') || id === 'analyzerProgram';
+        const curVal = el.value;
+        el.innerHTML = hasAll ? '<option value="">All Programs</option>' : '<option value="">Select Program...</option>';
+        allPrograms.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id; opt.textContent = p.program_name;
+            el.appendChild(opt);
+        });
+        if (curVal) el.value = curVal;
+    });
+    
+    // Populate scope dropdown for symbols
+    const scopeSel = document.getElementById('symbolTableId');
+    if (scopeSel) {
+        const cur = scopeSel.value;
+        scopeSel.innerHTML = '<option value="">Select Scope...</option>';
+        allScopes.forEach(s => {
+            const prog = allPrograms.find(p => p.id == s.program_id);
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = `${prog ? prog.program_name + ' → ' : ''}${s.scope_name}`;
+            scopeSel.appendChild(opt);
+        });
+        if (cur) scopeSel.value = cur;
+    }
+}
+
+// ===========================
+// CODE ANALYZER
+// ===========================
+function initAnalyzer() {
+    if (!codeEditor) {
+        codeEditor = CodeMirror(document.getElementById('codeEditorWrapper'), {
+            mode: 'text/x-csrc',
+            theme: 'dracula',
+            lineNumbers: true,
+            autofocus: true,
+            indentUnit: 4,
+            smartIndent: true,
+            lineWrapping: true,
+            value: ''
+        });
+    }
+    if (!allPrograms.length) loadPrograms();
+}
+
+function loadSampleCode() {
+    const samples = {
+        C: `#include <stdio.h>\n\nint globalVar = 100;\n\nfloat calculateArea(float radius) {\n    float pi = 3.14159;\n    float area = pi * radius * radius;\n    return area;\n}\n\nint main() {\n    int count = 0;\n    float r = 5.0;\n    char message[] = "Hello";\n    float result = calculateArea(r);\n    printf("Area: %f\\n", result);\n    return 0;\n}`,
+        'C++': `#include <iostream>\nusing namespace std;\n\nconst int MAX_SIZE = 100;\n\nclass Stack {\npublic:\n    int data[100];\n    int top;\n    Stack() { top = -1; }\n    void push(int val) {\n        int idx = ++top;\n        data[idx] = val;\n    }\n    int pop() {\n        int val = data[top--];\n        return val;\n    }\n};\n\nint main() {\n    Stack s;\n    int x = 42;\n    s.push(x);\n    return 0;\n}`
+    };
+    const lang = document.getElementById('analyzerLang').value;
+    if (codeEditor) codeEditor.setValue(samples[lang] || samples['C']);
+}
+
+function clearEditor() {
+    if (codeEditor) codeEditor.setValue('');
+    document.getElementById('analyzerResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-arrow-left-circle" style="font-size:40px; opacity:0.3"></i>
+            <p class="mt-3">Paste your code and click Analyze</p>
+        </div>`;
+}
+
+async function analyzeCode() {
+    const programId = document.getElementById('analyzerProgram').value;
+    const code = codeEditor ? codeEditor.getValue() : '';
+    const lang = document.getElementById('analyzerLang').value;
+    
+    if (!programId) { showToast('Please select a program first', 'error'); return; }
+    if (!code.trim()) { showToast('Please enter source code', 'error'); return; }
+    
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader me-2"></span>Analyzing...';
+    document.getElementById('analyzerResults').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-3"></div>
+            <p class="text-muted">Parsing source code...</p>
+        </div>`;
+    
+    try {
+        const result = await apiCall('analyze.php', 'POST', { program_id: programId, source_code: code, language: lang });
+        document.getElementById('analyzerResults').innerHTML = `
+            <div class="text-center mb-4">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:60px;height:60px;background:#dcfce7">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size:28px"></i>
+                </div>
+                <h5 class="text-success fw-bold">Analysis Complete!</h5>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:#f0f7ff">
+                        <div class="fw-bold fs-3 text-primary">${result.symbols_found}</div>
+                        <small class="text-muted">New Symbols Found</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:#f0fdf4">
+                        <div class="fw-bold fs-3 text-success">${result.scopes_created}</div>
+                        <small class="text-muted">Scopes Created</small>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="p-3 rounded-3 text-center" style="background:#fffbeb">
+                        <div class="fw-bold fs-3 text-warning">${result.total_symbols}</div>
+                        <small class="text-muted">Total Symbols in Program</small>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-primary w-100" onclick="showSection('symbols',null)">
+                <i class="bi bi-braces me-2"></i>View All Symbols
+            </button>`;
+        showToast(`Analysis done! ${result.symbols_found} symbols found.`);
+        loadPrograms();
+    } catch(e) {
+        document.getElementById('analyzerResults').innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-x-circle-fill text-danger" style="font-size:40px"></i>
+                <p class="text-danger mt-3 fw-bold">Analysis Failed</p>
+                <p class="text-muted small">${e.message}</p>
+            </div>`;
+        showToast(e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i>Analyze Code';
+    }
+}
+
+// ===========================
+// REPORTS
+// ===========================
+async function loadReports() {
+    try {
+        const stats = await apiCall('stats.php');
+        
+        // Symbol type
+        const stL = stats.symbol_type_breakdown.map(r => r.type);
+        const stD = stats.symbol_type_breakdown.map(r => parseInt(r.count));
+        createChart('reportSymbolChart', 'doughnut', stL, stD, COLORS.slice(0, stL.length));
+        
+        // Data types
+        const dtL = stats.data_type_breakdown.map(r => r.data_type);
+        const dtD = stats.data_type_breakdown.map(r => parseInt(r.count));
+        createChart('reportDataTypeChart', 'bar', dtL, dtD, COLORS.slice(0, dtL.length));
+        
+        // Scope usage
+        const suL = stats.scope_usage.map(r => r.scope);
+        const suD = stats.scope_usage.map(r => parseInt(r.count));
+        createChart('reportScopeChart', 'pie', suL, suD, ['#0d6efd','#198754','#dc3545','#ffc107']);
+        
+        // Error resolved vs open
+        const resolved = parseInt(stats.resolved_errors || 0);
+        const open = parseInt(stats.total_errors || 0);
+        createChart('reportErrorChart', 'doughnut', ['Open Errors', 'Resolved'], [open, resolved], ['#dc3545','#198754']);
+    } catch(e) { showToast('Failed to load reports', 'error'); }
+}
+
+// ===========================
+// INIT
+// ===========================
+async function initAppData() {
+    try {
+        allPrograms = await apiCall('programs.php');
+        allScopes = await apiCall('scopes.php');
+        populateProgramDropdowns();
+        document.getElementById('dbStatus').innerHTML = '<i class="bi bi-circle-fill me-1"></i>Connected';
+        document.getElementById('dbStatus').className = 'badge bg-success';
+    } catch(e) {
+        document.getElementById('dbStatus').innerHTML = '<i class="bi bi-circle-fill me-1"></i>Offline';
+        document.getElementById('dbStatus').className = 'badge bg-danger';
+    }
+    loadDashboard();
+}
+
+async function init() {
+    if (localStorage.getItem('stms_dark') === '1') document.body.classList.add('dark-mode');
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            if (!document.getElementById('authScreen').classList.contains('hidden')) return;
+            openQuickSearch();
+        }
+    });
+
+    const token = getAuthToken();
+    if (!token) {
+        showAuth();
+        return;
+    }
+    try {
+        const data = await apiCall('auth.php?action=me');
+        applyUserUI(data.user);
+        showApp();
+        initAppData();
+    } catch (e) {
+        localStorage.removeItem('stms_token');
+        showAuth();
+    }
+}
+
+init();
+</script>
+</body>
+</html>
